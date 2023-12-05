@@ -10,19 +10,7 @@ import config
 from model import LSTMModel, TransformerModel
 from oildataset import OilDataset
 import matplotlib.pyplot as plt
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description='LSTM')
-    parser.add_argument('--n_output', type=int, default=7, help='output size')
-    parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
-    parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
-    parser.add_argument('--batch_size', type=int, default=64, help='batch size')
-    parser.add_argument('--O', type=int, default=96, help='predict observation length, 96 or 336')
-    parser.add_argument('--model', type=str, default='lstm', help='model name', choices=['lstm', 'transformer'])
-    parser.add_argument('-g', '--gpu', type=str, default='0', help='gpu id to use(e.g. 0,1,2,3)')
-    parser.add_argument('--train', action='store_true', help='train model')
-    return parser.parse_args()
+from arguments import args
 
 
 def load_data():
@@ -103,7 +91,7 @@ def train(args, model, train_loader, val_loader):
             if val_loss < max_loss:
                 print(f'{max_loss} -> {val_loss} Saving model...')
                 max_loss = val_loss
-                torch.save(model.state_dict(), 'lstm.pth')
+                torch.save(model.state_dict(), './saved_models/{args.model}_{args.epochs}.pth')
 
     # 绘制loss曲线
     plt.plot(loss_list)
@@ -116,7 +104,7 @@ def train(args, model, train_loader, val_loader):
 def test(args, model, test_loader):
     sequence_length = args.O
     dev = args.dev
-    model.load_state_dict(torch.load('lstm.pth'))
+    model.load_state_dict(torch.load(f'./saved_models/{args.model}_{args.epochs}.pth'))
 
     # test
     model.eval()
@@ -149,7 +137,6 @@ def test(args, model, test_loader):
 
 
 if __name__ == '__main__':
-    args = parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     args.dev = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
