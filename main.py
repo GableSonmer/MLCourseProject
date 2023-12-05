@@ -1,4 +1,6 @@
 import datetime
+import os
+
 import numpy as np
 import argparse
 from torch import nn
@@ -12,11 +14,14 @@ import matplotlib.pyplot as plt
 
 def parse_args():
     parser = argparse.ArgumentParser(description='LSTM')
+    parser.add_argument('--n_output', type=int, default=7, help='output size')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
     parser.add_argument('--batch_size', type=int, default=64, help='batch size')
     parser.add_argument('--O', type=int, default=96, help='predict observation length, 96 or 336')
     parser.add_argument('--model', type=str, default='lstm', help='model name', choices=['lstm', 'transformer'])
+    parser.add_argument('-g', '--gpu', type=str, default='0', help='gpu id to use(e.g. 0,1,2,3)')
+    parser.add_argument('--train', action='store_true', help='train model')
     return parser.parse_args()
 
 
@@ -32,8 +37,10 @@ def train(args, model, train_loader, val_loader):
     sequence_length = args.O
     learning_rate = args.lr
     num_epochs = args.epochs
+    dev = args.dev
 
     # 实例化模型、损失函数和优化器
+    model = model.to(dev)
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -45,14 +52,24 @@ def train(args, model, train_loader, val_loader):
 
     for epoch in range(num_epochs):
         # train
+        model.train()
         running_loss = 0.0
         for i, (sequences, labels) in enumerate(train_loader):
             sequences = sequences.view(-1, sequence_length, config.input_size)
-            labels = labels.view(-1, 1)
+            # labels = labels.view(-1, 1)
+            labels = labels.view(-1, args.n_output, args.O)
+
+            sequences, labels = sequences.to(dev), labels.to(dev)
 
             optimizer.zero_grad()
             outputs = model(sequences)
-            loss = criterion(outputs, labels)
+
+            loss = 0
+            for k in range(args.n_output):
+                loss = criterion(outputs[k, :, :], labels[:, k, :])
+            loss /= outputs.shape[0]
+
+            # loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
 
@@ -69,9 +86,17 @@ def train(args, model, train_loader, val_loader):
             losses = []
             for sequences, labels in val_loader:
                 sequences = sequences.view(-1, sequence_length, config.input_size)
-                labels = labels.view(-1, 1)
+                # labels = labels.view(-1, 1)
+                labels = labels.view(-1, args.n_output, args.O)
+
+                sequences, labels = sequences.to(dev), labels.to(dev)
+
                 outputs = model(sequences)
-                loss = criterion(outputs, labels)
+                loss = 0
+                for k in range(args.n_output):
+                    loss = criterion(outputs[k, :, :], labels[:, k, :])
+                loss /= outputs.shape[0]
+                # loss = criterion(outputs, labels)
                 losses.append(loss.item())
             print(f'Epoch [{epoch + 1}/{num_epochs}], Val Loss: {np.mean(losses):.4f}')
             val_loss = np.mean(losses)
@@ -90,6 +115,9 @@ def train(args, model, train_loader, val_loader):
 
 def test(args, model, test_loader):
     sequence_length = args.O
+    dev = args.dev
+    model.load_state_dict(torch.load('lstm.pth'))
+
     # test
     model.eval()
     criterion1 = nn.L1Loss()
@@ -99,10 +127,22 @@ def test(args, model, test_loader):
         losses2 = []
         for sequences, labels in test_loader:
             sequences = sequences.view(-1, sequence_length, config.input_size)
-            labels = labels.view(-1, 1)
+            # labels = labels.view(-1, 1)
+            labels = labels.view(-1, args.n_output, args.O)
+
+            sequences, labels = sequences.to(dev), labels.to(dev)
+
             outputs = model(sequences)
-            loss1 = criterion1(outputs, labels)
-            loss2 = criterion2(outputs, labels)
+            # loss1 = criterion1(outputs, labels)
+            # loss2 = criterion2(outputs, labels)
+
+            loss = 0
+            for k in range(args.n_output):
+                loss1 = criterion1(outputs[k, :, :], labels[:, k, :])
+                loss2 = criterion2(outputs[k, :, :], labels[:, k, :])
+            loss1 /= outputs.shape[0]
+            loss2 /= outputs.shape[0]
+
             losses1.append(loss1.item())
             losses2.append(loss2.item())
         print(f'Test MAE: {np.mean(losses1):.4f}, Test MSE: {np.mean(losses2):.4f}')
@@ -110,10 +150,15 @@ def test(args, model, test_loader):
 
 if __name__ == '__main__':
     args = parse_args()
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+    args.dev = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
     train_loader, val_loader, test_loader = load_data()
+
     if args.model == 'lstm':
-        model = LSTMModel(config.input_size)
+        model = LSTMModel(config.input_size, args).to(args.dev)
     else:
-        model = TransformerModel(config.input_size)
+        model = TransformerModel(config.input_size).to(args.dev)
+
     train(args, model, train_loader, val_loader)
     test(args, model, test_loader)
