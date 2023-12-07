@@ -66,7 +66,7 @@ def train(args, model, train_loader, val_loader):
 
         # 添加loss到loss_list
         loss_list.append(running_loss / len(train_loader))
-        print(f'Epoch [{epoch + 1}/{num_epochs}], Train Loss: {running_loss / len(train_loader):.4f}')
+        print(f'Epoch [{epoch + 1}/{num_epochs}], Train Loss: {running_loss / len(train_loader):.4f}', end=' ')
 
         # val
         model.eval()
@@ -91,7 +91,7 @@ def train(args, model, train_loader, val_loader):
             if val_loss < max_loss:
                 print(f'{max_loss} -> {val_loss} Saving model...')
                 max_loss = val_loss
-                torch.save(model.state_dict(), './saved_models/{args.model}_{args.epochs}.pth')
+                torch.save(model.state_dict(), f'./saved_models/{args.model}_{args.epochs}.pth')
 
     # 绘制loss曲线
     plt.plot(loss_list)
@@ -147,5 +147,6 @@ if __name__ == '__main__':
     else:
         model = TransformerModel(config.input_size).to(args.dev)
 
+    print(args)
     train(args, model, train_loader, val_loader)
     test(args, model, test_loader)

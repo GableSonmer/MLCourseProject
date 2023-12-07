@@ -1,6 +1,10 @@
+import joblib
 import numpy as np
 import pandas as pd
-from torch.utils.data import Dataset, DataLoader
+from sklearn.preprocessing import MinMaxScaler
+from torch.utils.data import Dataset
+
+import config
 
 np.random.seed(42)
 
@@ -9,9 +13,9 @@ def windowing(values, temps, seq_len):
     data = []
     labels = []
     n = len(values)
-    for i in range(n - seq_len):
+    for i in range(n - seq_len * 2):
         data.append(values[i:i + seq_len])
-        labels.append(temps[i + seq_len])
+        labels.append(temps[i + seq_len:i + 2 * seq_len])
     return np.array(data), np.array(labels)
 
 
@@ -21,10 +25,17 @@ class OilDataset(Dataset):
         df = pd.read_csv(filename, sep=',')
         df.drop(columns=['date'], inplace=True)
         df = df.astype('float32')
+        # 归一化 和 反归一化,使用均值scale
+        scaler = MinMaxScaler(feature_range=(0, 1))
+        scaler.fit(df)
+        df = scaler.transform(df)
+
+        # save scaler
+        joblib.dump(scaler, 'scaler.pkl')
 
         # windowing
-        X = df.drop(columns=['OT']).values
-        y = df['OT'].values
+        X = df.tolist()
+        y = X.copy()
         features, labels = windowing(X, y, seq_len)
         features = features.astype(np.float32)
         labels = labels.astype(np.float32)

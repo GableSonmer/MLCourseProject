@@ -1,4 +1,6 @@
 """
 Configuration file for the application.
 """
-input_size = 6
+from sklearn.preprocessing import MinMaxScaler
+
+input_size = 7

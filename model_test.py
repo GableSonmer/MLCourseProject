@@ -1,21 +1,26 @@
 import os
 
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import torch
 
 from model import LSTMModel, TransformerModel
 from arguments import args
+import joblib
 
 
 def result_plot(args):
     dev = args.dev
     model = LSTMModel(7, args).to(args.dev)
-    model.load_state_dict(torch.load('lstm.pth'))
+    model.load_state_dict(torch.load('./saved_models/lstm_100.pth'))
 
     data = pd.read_csv('data/ETTh1.csv', sep=',').head(96 * 2).drop(columns=['date'])
     predict_data = torch.tensor(data[:96].values, dtype=torch.float32)
     labels = data.values
+
+    # load scaler for inverse transform
+    scaler = joblib.load('scaler.pkl')
 
     model.eval()
     with torch.no_grad():
