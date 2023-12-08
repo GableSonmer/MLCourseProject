@@ -4,8 +4,6 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import Dataset
 
-import config
-
 np.random.seed(42)
 
 
@@ -15,7 +13,7 @@ def windowing(values, temps, seq_len):
     n = len(values)
     for i in range(n - seq_len * 2):
         data.append(values[i:i + seq_len])
-        labels.append(temps[i + seq_len:i + 2 * seq_len])
+        labels.append(temps[i + seq_len])
     return np.array(data), np.array(labels)
 
 

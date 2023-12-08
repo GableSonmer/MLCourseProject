@@ -6,7 +6,7 @@ import argparse
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
 import torch
-import config
+# import config
 from model import LSTMModel, TransformerModel
 from oildataset import OilDataset
 import matplotlib.pyplot as plt
@@ -43,21 +43,12 @@ def train(args, model, train_loader, val_loader):
         model.train()
         running_loss = 0.0
         for i, (sequences, labels) in enumerate(train_loader):
-            sequences = sequences.view(-1, sequence_length, config.input_size)
-            # labels = labels.view(-1, 1)
-            labels = labels.view(-1, args.n_output, args.O)
-
             sequences, labels = sequences.to(dev), labels.to(dev)
 
             optimizer.zero_grad()
             outputs = model(sequences)
 
-            loss = 0
-            for k in range(args.n_output):
-                loss = criterion(outputs[k, :, :], labels[:, k, :])
-            loss /= outputs.shape[0]
-
-            # loss = criterion(outputs, labels)
+            loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
 
@@ -73,18 +64,10 @@ def train(args, model, train_loader, val_loader):
         with torch.no_grad():
             losses = []
             for sequences, labels in val_loader:
-                sequences = sequences.view(-1, sequence_length, config.input_size)
-                # labels = labels.view(-1, 1)
-                labels = labels.view(-1, args.n_output, args.O)
-
                 sequences, labels = sequences.to(dev), labels.to(dev)
 
                 outputs = model(sequences)
-                loss = 0
-                for k in range(args.n_output):
-                    loss = criterion(outputs[k, :, :], labels[:, k, :])
-                loss /= outputs.shape[0]
-                # loss = criterion(outputs, labels)
+                loss = criterion(outputs, labels)
                 losses.append(loss.item())
             print(f'Epoch [{epoch + 1}/{num_epochs}], Val Loss: {np.mean(losses):.4f}')
             val_loss = np.mean(losses)
@@ -114,22 +97,11 @@ def test(args, model, test_loader):
         losses1 = []
         losses2 = []
         for sequences, labels in test_loader:
-            sequences = sequences.view(-1, sequence_length, config.input_size)
-            # labels = labels.view(-1, 1)
-            labels = labels.view(-1, args.n_output, args.O)
-
             sequences, labels = sequences.to(dev), labels.to(dev)
 
             outputs = model(sequences)
-            # loss1 = criterion1(outputs, labels)
-            # loss2 = criterion2(outputs, labels)
-
-            loss = 0
-            for k in range(args.n_output):
-                loss1 = criterion1(outputs[k, :, :], labels[:, k, :])
-                loss2 = criterion2(outputs[k, :, :], labels[:, k, :])
-            loss1 /= outputs.shape[0]
-            loss2 /= outputs.shape[0]
+            loss1 = criterion1(outputs, labels)
+            loss2 = criterion2(outputs, labels)
 
             losses1.append(loss1.item())
             losses2.append(loss2.item())
@@ -143,9 +115,9 @@ if __name__ == '__main__':
     train_loader, val_loader, test_loader = load_data()
 
     if args.model == 'lstm':
-        model = LSTMModel(config.input_size, args).to(args.dev)
+        model = LSTMModel(args.input_size, args).to(args.dev)
     else:
-        model = TransformerModel(config.input_size).to(args.dev)
+        model = TransformerModel(args.input_size).to(args.dev)
 
     print(args)
     train(args, model, train_loader, val_loader)
