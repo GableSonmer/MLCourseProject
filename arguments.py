@@ -9,9 +9,11 @@ def parse_args():
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
     parser.add_argument('--batch_size', type=int, default=64, help='batch size')
     parser.add_argument('--O', type=int, default=96, help='predict observation length, 96 or 336')
-    parser.add_argument('--model', type=str, default='transformer', help='model name', choices=['lstm', 'transformer'])
+    # parser.add_argument('--model', type=str, default='transformer', help='model name', choices=['lstm', 'transformer'])
+    parser.add_argument('--model', type=str, default='lstm', help='model name', choices=['lstm', 'transformer'])
     parser.add_argument('-g', '--gpu', type=str, default='0', help='gpu id to use(e.g. 0,1,2,3)')
     return parser.parse_args()
 
 
+COLUMN_NAMES = ['HUFL', 'HULL', 'MUFL', 'MULL', 'LUFL', 'LULL', 'OT']
 args = parse_args()

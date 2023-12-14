@@ -11,6 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import torch
 
+import arguments
 from model import LSTMModel, TransformerModel
 from arguments import args
 import joblib
@@ -27,23 +28,29 @@ def result_plot(args):
 
     model_path = f'./saved_models/{args.model}_{args.epochs}.pth'
     model.load_state_dict(torch.load(model_path))
+
     # load scaler for inverse transform
     scaler = joblib.load('scaler.pkl')
 
-    # two tasks: 96 or 336
-    predict_sequence_length = 96
-    print(f'Predict sequence length: {predict_sequence_length}')
     data = pd.read_csv('data/ETTh1.csv', sep=',').drop(columns=['date'])
-    start_index = np.random.randint(0, len(data) - predict_sequence_length * 2 + 1)
+
+    # two tasks: predict_sequence_length = 96 or 336
+    # use 96 to predict predict_sequence_length
+    predict_sequence_length = 96
+    max_start_index = len(data) - 96 - predict_sequence_length + 1
+    start_index = np.random.randint(0, max_start_index)
+
+    # print some information
+    print(f'Predict sequence length: {predict_sequence_length}')
     print(f'Select range: {start_index} - {start_index + predict_sequence_length * 2}')
-    data = data.iloc[start_index:start_index + predict_sequence_length * 2, :]
+
+    data = data.iloc[start_index:start_index + 96 + predict_sequence_length, :]
     data = scaler.transform(data)
 
-    predict_data = torch.tensor(data[:predict_sequence_length], dtype=torch.float32).to(dev)
+    predict_data = torch.tensor(data[:96], dtype=torch.float32).to(dev)
     labels = scaler.inverse_transform(data)
 
-    date = range(96 * 2)
-
+    # predict
     model.eval()
     with torch.no_grad():
         for i in range(predict_sequence_length):
@@ -52,14 +59,21 @@ def result_plot(args):
             outputs = model(sequences)
             predict_data = torch.cat([predict_data, outputs], dim=0)
 
-        predict_data = scaler.inverse_transform(predict_data.cpu())
+    # draw the figure
+    plt.figure(figsize=(10, 30))
+    predict_data = scaler.inverse_transform(predict_data.cpu())
+    x = range(96 + predict_sequence_length)
+    for i in range(7):
+        plt.subplot(7, 1, i + 1)
+        plt.title(f'Feature <{arguments.COLUMN_NAMES[i]}>')
+        plt.plot(x, predict_data[:, i].T, label=f'Prediction{i}')
+        plt.plot(x, labels[:, i].T, label=f'Ground Truth{i}')
+        plt.legend(loc='upper left', prop={'size': 4})
 
-        for i in range(7):
-            plt.subplot(7, 1, i + 1)
-            plt.plot(date, predict_data[:, i].T, label=f'Prediction{i}')
-            plt.plot(date, labels[:, i].T, label=f'Ground Truth{i}')
-            plt.legend(loc='upper left', prop={'size': 4})
-        plt.show()
+    fig_path = f'./outputs/{args.model}_{args.epochs}_{predict_sequence_length}_predict_ground_truth.png'
+    print('Saved to', fig_path)
+    plt.savefig(fig_path, dpi=150)
+    plt.show()
 
 
 if __name__ == '__main__':
