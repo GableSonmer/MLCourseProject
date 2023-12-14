@@ -2,11 +2,9 @@ import datetime
 import os
 
 import numpy as np
-import argparse
 from torch import nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 import torch
-# import config
 from model import LSTMModel, TransformerModel
 from oildataset import OilDataset
 import matplotlib.pyplot as plt
@@ -72,9 +70,10 @@ def train(args, model, train_loader, val_loader):
             print(f'Epoch [{epoch + 1}/{num_epochs}], Val Loss: {np.mean(losses):.4f}')
             val_loss = np.mean(losses)
             if val_loss < max_loss:
-                print(f'{max_loss} -> {val_loss} Saving model...')
+                model_path = f'./saved_models/{args.model}_{args.epochs}.pth'
+                print(f'{max_loss} -> {val_loss} Saving model to {model_path} ...')
                 max_loss = val_loss
-                torch.save(model.state_dict(), f'./saved_models/{args.model}_{args.epochs}.pth')
+                torch.save(model.state_dict(), model_path)
 
     # 绘制loss曲线
     plt.plot(loss_list)
@@ -115,9 +114,9 @@ if __name__ == '__main__':
     train_loader, val_loader, test_loader = load_data()
 
     if args.model == 'lstm':
-        model = LSTMModel(args.input_size, args).to(args.dev)
+        model = LSTMModel(args.input_size).to(args.dev)
     else:
-        model = TransformerModel(args.input_size).to(args.dev)
+        model = TransformerModel(args.input_size, args.output_size).to(args.dev)
 
     print(args)
     train(args, model, train_loader, val_loader)
