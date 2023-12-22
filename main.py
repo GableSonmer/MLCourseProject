@@ -1,123 +1,154 @@
 import datetime
 import os
+import re
 
 import numpy as np
 from torch import nn
 from torch.utils.data import DataLoader
 import torch
+
+from exp import Exp
 from model import LSTMModel, TransformerModel
-from oildataset import OilDataset
+from oil_dataset import OilDataset
 import matplotlib.pyplot as plt
-from arguments import args
+import argparse
+
+COLUMN_NAMES = ['HUFL', 'HULL', 'MUFL', 'MULL', 'LUFL', 'LULL', 'OT']
 
 
-def load_data():
-    train_loader = DataLoader(OilDataset(type='train'), batch_size=64, shuffle=True)
-    val_loader = DataLoader(OilDataset(type='val'), batch_size=64, shuffle=False)
-    test_loader = DataLoader(OilDataset(type='test'), batch_size=64, shuffle=False)
-    return train_loader, val_loader, test_loader
+def parse_args():
+    parser = argparse.ArgumentParser(description='Oil Temperature Time Series Forecasting')
+    # input size and output size, can be removed
+    # parser.add_argument('--input_size', type=int, default=7, help='input size')
+    # parser.add_argument('--output_size', type=int, default=7, help='output size')
+
+    # visualization setting, plot result or not
+    parser.add_argument('--plot', type=bool, default=False, help='plot result or not')
+
+    # training setting, learning rate, epochs, batch size, patience
+    parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+    parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
+    parser.add_argument('--batch_size', type=int, default=64, help='batch size')
+    parser.add_argument('--patience', type=int, default=10, help='early stopping patience')
+
+    # length setting
+    parser.add_argument('--seq_len', type=int, default=96, help='input sequence length')
+    parser.add_argument('--label_len', type=int, default=0, help='start token index of input sequence')
+    parser.add_argument('--pred_len', type=int, default=336, help='predict sequence length')
+
+    # inverse setting
+    parser.add_argument('--inverse', type=bool, default=True, help='inverse data or not')
+
+    # model setting
+    parser.add_argument('--model', type=str, default='lstm', help='model name', choices=['lstm', 'transformer'])
+
+    # optimizer setting
+    parser.add_argument('--optimizer', type=str, default='adam', help='optimizer', choices=['adam', 'sgd', 'rmsprop'])
+
+    # criterion setting
+    parser.add_argument('--criterion', type=str, default='mse', help='criterion', choices=['mse', 'mae'])
+
+    # gpu setting
+    parser.add_argument('--use_gpu', type=bool, default=True, help='use gpu')
+    parser.add_argument('-g', '--gpu', type=str, default='0', help='gpu id to use(e.g. 0,1,2,3)')
+
+    # number of workers setting
+    parser.add_argument('--num_workers', type=int, default=0, help='number of workers for data loading')
+
+    # iteration setting, default is 5
+    parser.add_argument('--iteration', type=int, default=5, help='number of iterations for experiment')
+
+    # lr adjust setting
+    parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate type',
+                        choices=['type1', 'type2'])
+    return parser.parse_args()
 
 
-def train(args, model, train_loader, val_loader):
-    # 参数设置
-    sequence_length = args.O
-    learning_rate = args.lr
-    num_epochs = args.epochs
-    dev = args.dev
+def main(args):
+    args.use_gpu = torch.cuda.is_available()
+    print('Experiment setting:')
+    print(args)
+    for i in range(args.iteration):
+        if i > 0:
+            print('=' * 50)
+        print(f'Iteration {i + 1}')
+        # {model}_sqln{seq_len}_ll{label_len}_pl{pred_len}_lr{lr}_ep{epochs}_bs{batch_size}_op{optimizer}_cr{criterion}
+        setting = '{}_sqln{}_ll{}_pl{}_lr{}_ep{}_bs{}_op{}_cr{}'.format(
+            args.model,
+            args.seq_len,
+            args.label_len,
+            args.pred_len,
+            args.lr,
+            args.epochs,
+            args.batch_size,
+            args.optimizer,
+            args.criterion
+        )
 
-    # 实例化模型、损失函数和优化器
-    model = model.to(dev)
-    criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+        exp = Exp(args)
 
-    # 训练模型
-    max_loss = float('inf')
-
-    # 绘制训练过程中的loss曲线
-    loss_list = []
-
-    for epoch in range(num_epochs):
         # train
-        model.train()
-        running_loss = 0.0
-        for i, (sequences, labels) in enumerate(train_loader):
-            sequences, labels = sequences.to(dev), labels.to(dev)
+        print(f'Start training : {setting} ...........')
+        exp.train(setting)
 
-            optimizer.zero_grad()
-            outputs = model(sequences)
+        # test
+        print(f'Start testing : {setting} ...........')
+        exp.test(setting)
 
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
+        torch.cuda.empty_cache()
 
-            # 记录loss
-            running_loss += loss.item()
 
-        # 添加loss到loss_list
-        loss_list.append(running_loss / len(train_loader))
-        print(f'Epoch [{epoch + 1}/{num_epochs}], Train Loss: {running_loss / len(train_loader):.4f}', end=' ')
+def plot():
+    folders = os.listdir('results')
+    folders = sorted(filter(lambda x: x.startswith('lstm') or x.startswith('transformer'), folders))
+    length = len(folders)
+    folder = ''
+    while True:
+        try:
+            for i in range(length):
+                print(f'#{i}: {folders[i]}')
+            # index = input('Select the index of the folder you want to plot: ')
+            index = 0
+            folder = folders[int(index)]
+            break
+        except:
+            print('Invalid input, try again')
+            continue
 
-        # val
-        model.eval()
-        with torch.no_grad():
-            losses = []
-            for sequences, labels in val_loader:
-                sequences, labels = sequences.to(dev), labels.to(dev)
+    # extract predict length from folder name use regex
+    path = os.path.join('results', folder)
+    pred_len = re.findall(r'pl(\d+)_', folder)[0]
 
-                outputs = model(sequences)
-                loss = criterion(outputs, labels)
-                losses.append(loss.item())
-            print(f'Epoch [{epoch + 1}/{num_epochs}], Val Loss: {np.mean(losses):.4f}')
-            val_loss = np.mean(losses)
-            if val_loss < max_loss:
-                model_path = f'./saved_models/{args.model}_{args.epochs}.pth'
-                print(f'{max_loss} -> {val_loss} Saving model to {model_path} ...')
-                max_loss = val_loss
-                torch.save(model.state_dict(), model_path)
+    # load data
+    pred = np.load(os.path.join(path, 'pred.npy'))
+    true = np.load(os.path.join(path, 'true.npy'))
 
-    # 绘制loss曲线
-    plt.plot(loss_list)
-    now = datetime.datetime.now()
-    y_m_d = now.strftime('%Y-%m-%d')
-    plt.savefig(f'./outputs/{args.model}_{y_m_d}_{args.epochs}_loss.png')
+    assert pred.shape == true.shape
+    print('Shape', pred.shape)
+
+    idx = 0
+    pred = pred[idx]
+    true = true[idx]
+
+    plt.figure(figsize=(10, 30))
+    for i in range(7):
+        plt.subplot(7, 1, i + 1)
+        x1 = pred[:, i]
+        x2 = true[:, i]
+        plt.title(f'Feature {i + 1}')
+        plt.plot(x1, label='pred')
+        plt.plot(x2, label='true')
+        plt.legend()
+
+    plt.savefig('out.png')
     plt.show()
 
 
-def test(args, model, test_loader):
-    sequence_length = args.O
-    dev = args.dev
-    model.load_state_dict(torch.load(f'./saved_models/{args.model}_{args.epochs}.pth'))
-
-    # test
-    model.eval()
-    criterion1 = nn.L1Loss()
-    criterion2 = nn.MSELoss()
-    with torch.no_grad():
-        losses1 = []
-        losses2 = []
-        for sequences, labels in test_loader:
-            sequences, labels = sequences.to(dev), labels.to(dev)
-
-            outputs = model(sequences)
-            loss1 = criterion1(outputs, labels)
-            loss2 = criterion2(outputs, labels)
-
-            losses1.append(loss1.item())
-            losses2.append(loss2.item())
-        print(f'Test MAE: {np.mean(losses1):.4f}, Test MSE: {np.mean(losses2):.4f}')
-
-
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-    args.dev = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    args = parse_args()
+    args.plot = True
 
-    train_loader, val_loader, test_loader = load_data()
-
-    if args.model == 'lstm':
-        model = LSTMModel(args.input_size).to(args.dev)
+    if args.plot:
+        plot()
     else:
-        model = TransformerModel(args.input_size, args.output_size).to(args.dev)
-
-    print(args)
-    train(args, model, train_loader, val_loader)
-    test(args, model, test_loader)
+        main(args)

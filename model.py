@@ -11,45 +11,42 @@ from torch import nn
 
 
 class LSTMModel(nn.Module):
-    def __init__(self, input_size):
+    def __init__(self, seq_len, label_len, pred_len, device):
         super(LSTMModel, self).__init__()
+        self.seq_len = seq_len
+        self.label_len = label_len
+        self.pred_len = pred_len
+        self.device = device
         self.hidden_size = 64
         self.num_layers = 1
         self.n_output = 7
-        self.lstm = nn.LSTM(input_size, self.hidden_size, self.num_layers, batch_first=True)
+        self.lstm = nn.LSTM(7, self.hidden_size, self.num_layers, batch_first=True)
         self.fc = nn.Linear(self.hidden_size, self.n_output)
 
     def forward(self, x):
         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
         c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
 
-        out, _ = self.lstm(x, (h0, c0))
-        out = self.fc(out[:, -1, :])
-        return out
+        outputs = []
+        for _ in range(self.pred_len):
+            out, (h0, c0) = self.lstm(x, (h0, c0))
+            out = self.fc(out[:, -1, :])
+            outputs.append(out.unsqueeze(1))
+            x = torch.cat((x[:, 1:, :], out.unsqueeze(1)), dim=1)
 
+        return torch.cat(outputs, dim=1)
 
-# class TransformerModel(nn.Module):
-#     def __init__(self, input_size):
-#         super(TransformerModel, self).__init__()
-#         self.hidden_size = 64
-#         self.num_layers = 2
-#         self.transformer = nn.TransformerEncoderLayer(d_model=input_size, nhead=6)
-#         self.fc = nn.Linear(input_size, 1)
-#
-#     def forward(self, x):
-#         out = self.transformer(x)
-#         out = self.fc(out[:, -1, :])
-#         return out
 
 class TransformerModel(nn.Module):
-    def __init__(self, n_features, n_output, d_model=256, nhead=8, num_encoder_layers=3, dim_feedforward=512,
+    def __init__(self, seq_len, label_len, pred_len, device, d_model=256, nhead=8, num_encoder_layers=3,
+                 dim_feedforward=512,
                  dropout=0.1):
         super(TransformerModel, self).__init__()
-        self.linear = nn.Linear(n_features, d_model)
+        self.linear = nn.Linear(7, d_model)
         self.pos_encoder = PositionalEncoding(d_model, dropout)
         encoder_layers = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_encoder_layers)
-        self.output_layer = nn.Linear(d_model, n_output)
+        self.output_layer = nn.Linear(d_model, 7)
 
     def forward(self, src):
         src = self.linear(src)  # shape: [batch_size, seq_len, d_model]
