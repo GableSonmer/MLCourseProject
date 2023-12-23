@@ -9,6 +9,7 @@ import os
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from model import LSTMModel, TransformerModel
 from oil_dataset import OilDataset
@@ -104,45 +105,91 @@ class Exp:
             train_loss = []
             self.model.train()
 
-            for i, (batch_x, batch_y) in enumerate(train_loader):
+            for batch_x, batch_y in tqdm(train_loader):
                 # forward
                 optimizer.zero_grad()
-                pred, true = self._process_one_batch(train_set, batch_x, batch_y)
-                loss = criterion(pred, true)
-                # record loss
-                train_loss.append(loss.item())
-                # backprop
-                loss.backward()
+
+                # call the _process_one_batch function
+                loss_item, _, _ = self._process_one_batch(train_set, batch_x, batch_y, criterion)
+                train_loss.append(loss_item)
+
                 optimizer.step()
 
             train_loss = np.average(train_loss)
             vali_loss = self.vali(val_set, val_loader, criterion)
             test_loss = self.vali(test_set, test_loader, criterion)
-            print(f'Epoch {epoch} train loss: {train_loss}, val loss: {vali_loss}, test loss: {test_loss}')
+            tqdm.write(f'Epoch {epoch} train loss: {train_loss}, val loss: {vali_loss}, test loss: {test_loss}')
 
             early_stopping(vali_loss, self.model, path)
             if early_stopping.early_stop:
-                print("Early stopping")
+                tqdm.write("Early stopping")
                 break
 
-            adjust_learning_rate(optimizer, epoch + 1, self.args)
+            # adjust_learning_rate(optimizer, epoch + 1, self.args)
 
         best_model_path = path + '/' + 'checkpoint.pth'
         self.model.load_state_dict(torch.load(best_model_path))
 
         return self.model
 
+    def _process_one_batch(self, dataset_object, batch_x, batch_y, criterion=None):
+        """
+        Process one batch of data, including forward and backward.
+        return the loss.item(), pred, true.
+        Because transformer can handle the whole sequence at one time, but lstm can't,
+        it needs to be processed one time step and backward one time step.
+        Process logic:
+            pred, true = self._process_one_batch(train_set, batch_x, batch_y)
+            loss = criterion(pred, true)
+            # record loss
+            train_loss.append(loss.item())
+            # backprop
+            loss.backward()
+        Optional:
+            # when use label_len, use this
+            # batch_y = batch_y[:, -self.args.pred_len:, :].to(self.device)
+        Return:
+            loss_item: the loss.item(), type: float
+            pred: the prediction, type: numpy array
+            true: the ground truth, type: numpy array
+        """
+        batch_x = batch_x.float().to(self.device)
+        batch_y = batch_y.float().to(self.device)
+
+        # forward
+        if self.args.model == 'transformer':
+            outputs = self.model(batch_x, batch_y)
+            if self.args.inverse:
+                outputs = dataset_object.inverse_transform(outputs)
+        elif self.args.model == 'lstm':
+            outputs = self.model(batch_x)
+        else:
+            raise NotImplementedError
+
+        # backward
+        if self.args.inverse:
+            outputs = dataset_object.inverse_transform(outputs)
+        if criterion is not None:
+            loss = criterion(outputs, batch_y)
+            loss_item = loss.item()
+            loss.backward()
+        else:
+            loss_item = 0
+
+        # return
+        return loss_item, outputs.detach().cpu().numpy(), batch_y.detach().cpu().numpy()
+
     def test(self, setting):
         test_data, test_loader = self._get_data(flag='test')
         self.model.eval()
         preds = []
         trues = []
-        for i, (batch_x, batch_y) in enumerate(test_loader):
+        for batch_x, batch_y in tqdm(test_loader):
             # batch_x: (batch_size, seq_len, feature_dim)
             # batch_y: (batch_size, seq_len+label_len, feature_dim)
-            pred, true = self._process_one_batch(test_data, batch_x, batch_y)
-            preds.append(pred.detach().cpu().numpy())
-            trues.append(true.detach().cpu().numpy())
+            _, pred, true = self._process_one_batch(test_data, batch_x, batch_y)
+            preds.append(pred)
+            trues.append(true)
 
         preds = np.array(preds)
         trues = np.array(trues)
@@ -158,6 +205,8 @@ class Exp:
 
         mse = np.mean((preds - trues) ** 2)
         mae = np.mean(np.abs(preds - trues))
+        print('mse:{}, mae:{}'.format(mse, mae))
+
         np.save(folder_path + 'pred.npy', preds)
         np.save(folder_path + 'true.npy', trues)
         return
@@ -165,22 +214,10 @@ class Exp:
     def vali(self, vali_data, vali_loader, criterion):
         self.model.eval()
         total_loss = []
-        for i, (batch_x, batch_y) in enumerate(vali_loader):
-            pred, true = self._process_one_batch(vali_data, batch_x, batch_y)
-            loss = criterion(pred.detach().cpu(), true.detach().cpu())
+        for batch_x, batch_y in tqdm(vali_loader):
+            loss, pred, true = self._process_one_batch(vali_data, batch_x, batch_y, criterion)
+            # loss = criterion(pred.detach().cpu(), true.detach().cpu())
             total_loss.append(loss)
         total_loss = np.average(total_loss)
         self.model.train()
         return total_loss
-
-    def _process_one_batch(self, dataset_object, batch_x, batch_y):
-        batch_x = batch_x.float().to(self.device)
-        batch_y = batch_y.float().to(self.device)
-
-        outputs = self.model(batch_x)
-        if self.args.inverse:
-            outputs = dataset_object.inverse_transform(outputs)
-
-        # when use label_len, use this
-        # batch_y = batch_y[:, -self.args.pred_len:, :].to(self.device)
-        return outputs, batch_y

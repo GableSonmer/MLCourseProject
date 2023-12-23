@@ -1,15 +1,10 @@
-import datetime
 import os
 import re
 
 import numpy as np
-from torch import nn
-from torch.utils.data import DataLoader
 import torch
 
 from exp import Exp
-from model import LSTMModel, TransformerModel
-from oil_dataset import OilDataset
 import matplotlib.pyplot as plt
 import argparse
 
@@ -107,8 +102,7 @@ def plot():
         try:
             for i in range(length):
                 print(f'#{i}: {folders[i]}')
-            # index = input('Select the index of the folder you want to plot: ')
-            index = 0
+            index = input('Select the index of the folder you want to plot: ')
             folder = folders[int(index)]
             break
         except:
@@ -118,6 +112,7 @@ def plot():
     # extract predict length from folder name use regex
     path = os.path.join('results', folder)
     pred_len = re.findall(r'pl(\d+)_', folder)[0]
+    print(f'Used {path}')
 
     # load data
     pred = np.load(os.path.join(path, 'pred.npy'))
@@ -126,9 +121,10 @@ def plot():
     assert pred.shape == true.shape
     print('Shape', pred.shape)
 
-    idx = 0
+    idx = np.random.randint(0, pred.shape[0])
     pred = pred[idx]
     true = true[idx]
+    print('Select index', idx)
 
     plt.figure(figsize=(10, 30))
     for i in range(7):
@@ -140,15 +136,18 @@ def plot():
         plt.plot(x2, label='true')
         plt.legend()
 
-    plt.savefig('out.png')
+
+    plt.savefig(f'./outputs/{folder}.png')
     plt.show()
+    print(f'Save to ./outputs/{folder}.png')
 
 
 if __name__ == '__main__':
     args = parse_args()
-    args.plot = True
 
     if args.plot:
         plot()
     else:
         main(args)
+
+
