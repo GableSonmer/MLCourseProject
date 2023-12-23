@@ -158,8 +158,6 @@ class Exp:
 
         mse = np.mean((preds - trues) ** 2)
         mae = np.mean(np.abs(preds - trues))
-        print('mse:{}, mae:{}'.format(mse, mae))
-
         np.save(folder_path + 'pred.npy', preds)
         np.save(folder_path + 'true.npy', trues)
         return

@@ -141,3 +141,8 @@ celerybeat-schedule
 
 # virtualenv
 env/
+
+
+# checkpoints and results folder
+checkpoints/
+results/
