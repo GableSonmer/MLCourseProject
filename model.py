@@ -19,7 +19,23 @@ class LSTMModel(nn.Module):
         self.n_output = 7
         self.device = device
 
-        raise NotImplementedError
+        self.hidden_size = 512
+        self.num_layers = 2
+
+        self.lstm = nn.LSTM(input_size=self.n_input, hidden_size=self.hidden_size, num_layers=self.num_layers,
+                            batch_first=True)
+        self.fcs = nn.ModuleList([nn.Linear(self.hidden_size, self.pred_len) for _ in range(self.n_output)])
+
+    def forward(self, x):
+        batch_size = x.size(0)
+        h = torch.zeros(self.num_layers, batch_size, self.hidden_size).to(self.device)
+        c = torch.zeros(self.num_layers, batch_size, self.hidden_size).to(self.device)
+        # (batch_size, seq_len, n_input)
+        out, _ = self.lstm(x, (h, c))
+        # (batch_size, seq_len, hidden_size)
+        out = torch.stack([self.fcs[i](out)[:, -1, :] for i in range(self.n_output)], dim=2)
+        # (batch_size, pred_len, n_output)
+        return out
 
 
 class TransformerModel(nn.Module):
@@ -58,6 +74,7 @@ class TransformerModel(nn.Module):
         # transformer
         out = self.transformer(src, tgt)
         out = self.fc(out)
+        # (batch_size, pred_len, n_output)
         return out
 
         # src = self.encoder(x)
