@@ -159,8 +159,6 @@ class Exp:
         # forward
         if self.args.model == 'transformer':
             outputs = self.model(batch_x, batch_y)
-            if self.args.inverse:
-                outputs = dataset_object.inverse_transform(outputs)
         elif self.args.model == 'lstm':
             outputs = self.model(batch_x)
         else:
@@ -172,6 +170,7 @@ class Exp:
         if criterion is not None:
             loss = criterion(outputs, batch_y)
             loss_item = loss.item()
+            torch.backends.cudnn.enabled = False    # 关闭lstm eval时反向传播报错
             loss.backward()
         else:
             loss_item = 0
