@@ -125,7 +125,7 @@ class Exp:
                 tqdm.write("Early stopping")
                 break
 
-            # adjust_learning_rate(optimizer, epoch + 1, self.args)
+            adjust_learning_rate(optimizer, epoch + 1, self.args)
 
         best_model_path = path + '/' + 'checkpoint.pth'
         self.model.load_state_dict(torch.load(best_model_path))
@@ -170,7 +170,7 @@ class Exp:
         if criterion is not None:
             loss = criterion(outputs, batch_y)
             loss_item = loss.item()
-            torch.backends.cudnn.enabled = False    # 关闭lstm eval时反向传播报错
+            torch.backends.cudnn.enabled = False  # 关闭lstm eval时反向传播报错
             loss.backward()
         else:
             loss_item = 0
@@ -204,11 +204,12 @@ class Exp:
 
         mse = np.mean((preds - trues) ** 2)
         mae = np.mean(np.abs(preds - trues))
+        loss_array = np.array([mse, mae])
         print('mse:{}, mae:{}'.format(mse, mae))
 
         np.save(folder_path + 'pred.npy', preds)
         np.save(folder_path + 'true.npy', trues)
-        return
+        return folder_path, mse, mae
 
     def vali(self, vali_data, vali_loader, criterion):
         self.model.eval()

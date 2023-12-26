@@ -2,6 +2,7 @@ import os
 import re
 
 import numpy as np
+import pandas as pd
 import torch
 
 from exp import Exp
@@ -56,6 +57,9 @@ def parse_args():
     # lr adjust setting
     parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate type',
                         choices=['type1', 'type2'])
+
+    # draw how many samples
+    parser.add_argument('--plot_samples', type=int, default=10, help='plot how many samples')
     return parser.parse_args()
 
 
@@ -63,6 +67,8 @@ def main(args):
     args.use_gpu = torch.cuda.is_available()
     print('Experiment setting:')
     print(args)
+    metrics = []
+    folder_path = ''
     for i in range(args.iteration):
         if i > 0:
             print('=' * 50)
@@ -88,58 +94,72 @@ def main(args):
 
         # test
         print(f'Start testing : {setting} ...........')
-        exp.test(setting)
-
+        folder_path, mse, mae = exp.test(setting)
+        metrics.append([i, mse, mae])
         torch.cuda.empty_cache()
 
+    # save metrics
+    df = pd.DataFrame(metrics, columns=['iteration', 'mse', 'mae'])
+    df.to_csv(os.path.join('results', folder_path, 'metrics.csv'))
+    print(f'Save metrics to ./results/{folder_path}/metrics.csv')
 
-def plot():
-    folders = os.listdir('results')
-    folders = sorted(filter(lambda x: x.startswith('lstm') or x.startswith('transformer'), folders))
-    length = len(folders)
-    folder = ''
-    while True:
-        try:
-            for i in range(length):
-                print(f'#{i}: {folders[i]}')
-            index = input('Select the index of the folder you want to plot: ')
-            folder = folders[int(index)]
-            break
-        except:
-            print('Invalid input, try again')
-            continue
 
+def draw(folder):
     # extract predict length from folder name use regex
     path = os.path.join('results', folder)
     pred_len = re.findall(r'pl(\d+)_', folder)[0]
     print(f'Used {path}')
 
     # load data
-    pred = np.load(os.path.join(path, 'pred.npy'))
-    true = np.load(os.path.join(path, 'true.npy'))
+    preds = np.load(os.path.join(path, 'pred.npy'))
+    trues = np.load(os.path.join(path, 'true.npy'))
 
-    assert pred.shape == true.shape
-    print('Shape', pred.shape)
+    assert preds.shape == trues.shape
+    print('Shape', preds.shape)
 
-    idx = np.random.randint(0, pred.shape[0])
-    pred = pred[idx]
-    true = true[idx]
-    print('Select index', idx)
+    n = preds.shape[0]
+    indexs = [0, n - 1]
+    # extend 10 random indexs, not include 0 and n - 1, and no duplicate
+    indexs.extend(np.random.randint(1, n - 1, args.plot_samples))
 
-    plt.figure(figsize=(10, 30))
-    for i in range(7):
-        plt.subplot(7, 1, i + 1)
-        x1 = pred[:, i]
-        x2 = true[:, i]
-        plt.title(f'Feature {i + 1}')
-        plt.plot(x1, label='pred')
-        plt.plot(x2, label='true')
-        plt.legend()
+    for idx in indexs:
+        pred = preds[idx, :, :]
+        true = trues[idx, :, :]
+
+        plt.figure(figsize=(10, 30))
+        for i in range(7):
+            plt.subplot(7, 1, i + 1)
+            x1 = pred[:, i]
+            x2 = true[:, i]
+            plt.title(f'Feature {i + 1}')
+            plt.plot(x1, label='pred')
+            plt.plot(x2, label='true')
+            plt.legend()
+
+        saved_path = os.path.join('plots', folder)
+        if not os.path.exists(saved_path):
+            os.makedirs(saved_path)
+
+        plt.savefig(f'./{saved_path}/Index_{idx}.png')
+        plt.show()
+        print(f'Save to ./{saved_path}/Index_{idx}.png')
 
 
-    plt.savefig(f'./outputs/{folder}.png')
-    plt.show()
-    print(f'Save to ./outputs/{folder}.png')
+def plot():
+    folders = os.listdir('results')
+    folders = sorted(filter(lambda x: x.startswith('lstm') or x.startswith('transformer'), folders))
+    length = len(folders)
+    while True:
+        try:
+            for i in range(length):
+                print(f'#{i}: {folders[i]}')
+            index = input('Select the index of the folder you want to plot: ')
+            folder = folders[int(index)]
+            draw(folder)
+            break
+        except Exception as e:
+            print(e)
+            break
 
 
 if __name__ == '__main__':
@@ -149,5 +169,3 @@ if __name__ == '__main__':
         plot()
     else:
         main(args)
-
-

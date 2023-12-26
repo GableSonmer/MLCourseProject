@@ -146,3 +146,4 @@ env/
 # checkpoints and results folder
 checkpoints/
 results/
+plots/
