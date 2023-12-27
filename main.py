@@ -25,12 +25,12 @@ def parse_args():
     parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
     parser.add_argument('--batch_size', type=int, default=64, help='batch size')
-    parser.add_argument('--patience', type=int, default=10, help='early stopping patience')
+    parser.add_argument('--patience', type=int, default=20, help='early stopping patience')
 
     # length setting
     parser.add_argument('--seq_len', type=int, default=96, help='input sequence length')
     parser.add_argument('--label_len', type=int, default=0, help='start token index of input sequence')
-    parser.add_argument('--pred_len', type=int, default=336, help='predict sequence length')
+    parser.add_argument('--pred_len', type=int, default=96, help='predict sequence length')
 
     # inverse setting
     parser.add_argument('--inverse', type=bool, default=True, help='inverse data or not')
@@ -100,8 +100,8 @@ def main(args):
 
     # save metrics
     df = pd.DataFrame(metrics, columns=['iteration', 'mse', 'mae'])
-    df.to_csv(os.path.join('results', folder_path, 'metrics.csv'))
-    print(f'Save metrics to ./results/{folder_path}/metrics.csv')
+    df.to_csv(os.path.join(folder_path, 'metrics.csv'), index=False)
+    print(f'Save metrics to {folder_path}metrics.csv')
 
 
 def draw(folder):
