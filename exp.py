@@ -11,7 +11,7 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from model import LSTMModel, TransformerModel
+from models import Transformer, LSTM, STNet
 from oil_dataset import OilDataset
 from tools import EarlyStopping, adjust_learning_rate
 
@@ -20,11 +20,12 @@ class Exp:
     def __init__(self, args):
         self.args = args
         self.device = self._acquire_device()
+        self.args.device = self.device
         self.model = self._build_model().to(self.device)
 
     def _acquire_device(self):
         if self.args.use_gpu:
-            os.environ["CUDA_VISIBLE_DEVICES"] = str(self.args.gpu)
+            # os.environ["CUDA_VISIBLE_DEVICES"] = str(self.args.gpu)
             device = torch.device('cuda:{}'.format(self.args.gpu))
             print('Use GPU: cuda:{}'.format(self.args.gpu))
         else:
@@ -34,14 +35,12 @@ class Exp:
 
     def _build_model(self):
         model_dict = {
-            'lstm': LSTMModel,
-            'transformer': TransformerModel,
+            'lstm': LSTM,
+            'transformer': Transformer,
+            'stnet': STNet,
             # add your model here
         }
-        model = model_dict[self.args.model](self.args.seq_len,
-                                            self.args.label_len,
-                                            self.args.pred_len,
-                                            self.device)
+        model = model_dict[self.args.model].Model(self.args)
         return model
 
     def _get_data(self, flag):
@@ -125,7 +124,7 @@ class Exp:
                 tqdm.write("Early stopping")
                 break
 
-            # adjust_learning_rate(optimizer, epoch + 1, self.args)
+            adjust_learning_rate(optimizer, epoch + 1, self.args)
 
         best_model_path = path + '/' + 'checkpoint.pth'
         self.model.load_state_dict(torch.load(best_model_path))
@@ -156,13 +155,7 @@ class Exp:
         batch_x = batch_x.float().to(self.device)
         batch_y = batch_y.float().to(self.device)
 
-        # forward
-        if self.args.model == 'transformer':
-            outputs = self.model(batch_x, batch_y)
-        elif self.args.model == 'lstm':
-            outputs = self.model(batch_x)
-        else:
-            raise NotImplementedError
+        outputs = self.model(batch_x, batch_y)
 
         # backward
         if self.args.inverse:
@@ -170,7 +163,7 @@ class Exp:
         if criterion is not None:
             loss = criterion(outputs, batch_y)
             loss_item = loss.item()
-            torch.backends.cudnn.enabled = False    # 关闭lstm eval时反向传播报错
+            torch.backends.cudnn.enabled = False  # 关闭lstm eval时反向传播报错
             loss.backward()
         else:
             loss_item = 0
@@ -180,6 +173,8 @@ class Exp:
 
     def test(self, setting):
         test_data, test_loader = self._get_data(flag='test')
+        best_model_path = os.path.join('./checkpoints', setting, 'checkpoint.pth')
+        self.model.load_state_dict(torch.load(best_model_path))
         self.model.eval()
         preds = []
         trues = []
@@ -208,14 +203,13 @@ class Exp:
 
         np.save(folder_path + 'pred.npy', preds)
         np.save(folder_path + 'true.npy', trues)
-        return
+        return folder_path, mse, mae
 
     def vali(self, vali_data, vali_loader, criterion):
         self.model.eval()
         total_loss = []
         for batch_x, batch_y in tqdm(vali_loader):
             loss, pred, true = self._process_one_batch(vali_data, batch_x, batch_y, criterion)
-            # loss = criterion(pred.detach().cpu(), true.detach().cpu())
             total_loss.append(loss)
         total_loss = np.average(total_loss)
         self.model.train()
