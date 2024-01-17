@@ -1,7 +1,7 @@
 """
 The oil data loader class.
 @author: mysong
-@date: 2020/11/24
+@date: 2023/12/22
 @file: oil_dataset.py
 """
 import numpy as np
@@ -13,7 +13,7 @@ from tools import StandardScaler
 
 class OilDataset(Dataset):
     def __init__(self,
-                 data_path='data/ETTh1.csv',
+                 data_path='data/',
                  flag='train',
                  seq_len=96,
                  pred_len=96,
@@ -21,7 +21,6 @@ class OilDataset(Dataset):
                  scale=True,
                  inverse=True):
         assert flag in ['train', 'val', 'test']
-        type_map = {'train': 0, 'val': 1, 'test': 2}
         # data path
         self.data_path = data_path
 
@@ -30,7 +29,7 @@ class OilDataset(Dataset):
         self.pred_len = pred_len
         self.label_len = label_len
         self.scale = scale
-        self.set_type = type_map[flag]
+        self.data_type = flag
         self.inverse = inverse
 
         # read data
@@ -38,7 +37,7 @@ class OilDataset(Dataset):
 
     def _read_data(self):
         self.scaler = StandardScaler()
-        df_raw = pd.read_csv(self.data_path)
+        df_raw = pd.read_csv(self.data_path + self.data_type + '_set.csv')
         df_raw.drop(columns=['date'], inplace=True)
 
         # extract data
@@ -46,27 +45,21 @@ class OilDataset(Dataset):
         df_data = df_raw[cols_data]
 
         # scale if needed
-        # use border1 and border2 to split train, val and test
-        # first 12 months for train, second 4 months for val, last 4 months for test
-        # total 20 months
-        border1s = [0, 12 * 30 * 24 - self.seq_len, 12 * 30 * 24 + 4 * 30 * 24 - self.seq_len]
-        border2s = [12 * 30 * 24, 12 * 30 * 24 + 4 * 30 * 24, 12 * 30 * 24 + 8 * 30 * 24]
-        border1 = border1s[self.set_type]
-        border2 = border2s[self.set_type]
         if self.scale:
             # use only train to scale, avoid data leakage
-            train_data = df_data[border1s[0]:border2s[0]]
+            train_data = pd.read_csv(self.data_path + 'train_set.csv')
+            train_data = train_data.drop(columns=['date'])
             self.scaler.fit(train_data.values)
             data = self.scaler.transform(df_data.values)
         else:
             data = df_data.values
 
         # get x and y
-        self.data_x = data[border1:border2]
+        self.data_x = data[:]
         if self.inverse:
-            self.data_y = df_data.values[border1:border2]
+            self.data_y = df_data.values[:]
         else:
-            self.data_y = data[border1:border2]
+            self.data_y = data[:]
 
     def __len__(self):
         return len(self.data_x) - self.seq_len - self.pred_len + 1

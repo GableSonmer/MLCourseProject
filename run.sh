@@ -1,27 +1,11 @@
-# LSTM
-python -u main.py --model lstm --epochs 100 --pred_len 96 --optimizer adam --criterion mse --lradj type1 --iteration 5
+# Best LSTM
+python -u main.py --model lstm --pred_len 96 --lr 0.0001 --epochs 500 --batch_size 128 --optimizer adam --iteration 5
+python -u main.py --model lstm --pred_len 336 --lr 0.0001 --epochs 500 --batch_size 128 --optimizer adam --iteration 5
 
-python -u main.py --model lstm --epochs 100 --pred_len 96 --optimizer sgd --criterion mse --lradj type1
+# Best Transformer
+python -u main.py --model transformer --pred_len 96 --lr 0.0001 --epochs 500 --batch_size 32 --optimizer adam --iteration 5
+python -u main.py --model transformer --pred_len 336 --lr 0.0001 --epochs 500 --batch_size 32 --optimizer adam --iteration 5
 
-python -u main.py --model lstm --epochs 100 --pred_len 96 --optimizer rmsprop --criterion mse --lradj type2
-
-python -u main.py --model lstm --epochs 100 --pred_len 336 --optimizer adam --criterion mse --lradj type1
-
-python -u main.py --model lstm --epochs 100 --pred_len 336 --optimizer sgd --criterion mse --lradj type1
-
-python -u main.py --model lstm --epochs 100 --pred_len 336 --optimizer rmsprop --criterion mse --lradj type2
-
-# Transformer
-python -u main.py --model transformer --epochs 100 --pred_len 96 --optimizer adam --criterion mse --lradj type1 --iteration 5
-
-python -u main.py --model transformer --epochs 100 --pred_len 96 --optimizer sgd --criterion mse --lradj type1
-
-python -u main.py --model transformer --epochs 100 --pred_len 96 --optimizer rmsprop --criterion mse --lradj type2
-
-python -u main.py --model transformer --epochs 100 --pred_len 336 --optimizer adam --criterion mse --lradj type1
-
-python -u main.py --model transformer --epochs 100 --pred_len 336 --optimizer sgd --criterion mse --lradj type1
-
-python -u main.py --model transformer --epochs 100 --pred_len 336 --optimizer rmsprop --criterion mse --lradj type2
-
-# SciNet ????
+# Best STNet
+python -u main.py --model transformer --pred_len 96 --lr 0.001 --epochs 500 --batch_size 64 --optimizer rmsprop --iteration 5
+python -u main.py --model transformer --pred_len 336 --lr 0.001 --epochs 500 --batch_size 64 --optimizer rmsprop --iteration 5
