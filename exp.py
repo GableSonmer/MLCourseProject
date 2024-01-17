@@ -199,6 +199,7 @@ class Exp:
 
         mse = np.mean((preds - trues) ** 2)
         mae = np.mean(np.abs(preds - trues))
+        loss_array = np.array([mse, mae])
         print('mse:{}, mae:{}'.format(mse, mae))
 
         np.save(folder_path + 'pred.npy', preds)

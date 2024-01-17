@@ -30,6 +30,7 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=64, help='batch size')
     parser.add_argument('--patience', type=int, default=15, help='early stopping patience')
 
+
     # length setting
     parser.add_argument('--seq_len', type=int, default=96, help='input sequence length')
     parser.add_argument('--label_len', type=int, default=0, help='start token index of input sequence')
@@ -64,7 +65,6 @@ def parse_args():
 
     # draw how many samples
     parser.add_argument('--plot_samples', type=int, default=10, help='plot how many samples')
-
     return parser.parse_args()
 
 
@@ -149,7 +149,6 @@ def main(args):
     print(args)
     metrics = []
     folder_path = ''
-
     for i in range(args.iteration):
         if i > 0:
             print('=' * 50)
